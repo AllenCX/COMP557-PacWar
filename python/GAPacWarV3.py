@@ -4,7 +4,9 @@ import numpy as np
 import random
 import sys, os, json, time, copy
 import operator
+import multiprocessing
 from multiprocessing import Pool, Process, Queue, Array
+
 '''
 This version will fix GE2 and only improve GE1, then fix GE1 searching GE2.
 '''
@@ -27,7 +29,7 @@ class GAPacWar(object):
                  turns=10,
                  num_iters=100, 
                  first_rount_time=1,
-                 elimination_step=200,
+                 elimination_ratio=0.2,
                  log_step=10,
                  save_step=100,
                  seed=7, 
@@ -43,7 +45,7 @@ class GAPacWar(object):
         self.turns = turns
         self.first_rount_time = first_rount_time
         self.num_iters = num_iters
-        self.elimination_step = elimination_step
+        self.elimination_ratio = elimination_ratio
         self.log_step = log_step
         self.save_step = save_step
         self.seed = seed
@@ -99,23 +101,19 @@ class GAPacWar(object):
             ge1_scores = Array('d', [0] * len(GE1))
             ge2_scores = Array('d', [0] * len(GE2))
             
-            p = Pool(4)
+            self.p = Pool(multiprocessing.cpu_count())
             for i in xrange(len(GE1)):
                 for j in xrange(len(GE2)):
                     # bottleneck
-                    res = p.apply_async(run_pacWar, args=(GE1, GE2, (i, j),))
+                    res = self.p.apply_async(run_pacWar, args=(GE1, GE2, (i, j),))
             
                     #scores = res.get(timeout=1)
                     if verbose:
                         print("The duel lasted %d rounds, specie 1 remains: %d, specie 2 remains: %d" % (rounds, c1, c2))
                         print("The final scores for GE1[%d] vs GE2[%d] are: %d : %d" % (i, j, scores[0], scores[1]))
-            try:
-                p.close()
-                p.join()
-            except KeyboardInterrupt:
-                print("Caught KeyboardInterrupt, terminating workers")
-                p.terminate()
-                p.join()
+            self.p.close()
+            self.p.join()
+            
             ge1_scores = list(ge1_scores)
             ge2_scores = list(ge2_scores)
             #print(time.time() - start_time)
@@ -164,13 +162,18 @@ class GAPacWar(object):
 
         # sort the scores by descend order
         scores_gene1 = sorted(scores_gene1, key=lambda x: x[0], reverse=True)
+
+        elimate_idx = int(pop_size * self.elimination_ratio)
+        survive_idx = int(pop_size * (1 - self.elimination_ratio))
+        
+        scores_gene_duplicate = copy.deepcopy(scores_gene1[:elimate_idx])
         
         # duplicate the gene with the highest score, remove the gene with lowest score
-        scores_gene1.pop()
-        scores_gene1.append(scores_gene1[0])
+        scores_gene1 = scores_gene1[:survive_idx] + scores_gene_duplicate
         
         prob1, gene1 = zip(*scores_gene1)
-
+        gene1 = list(gene1)
+        prob1 = list(prob1)
         # normalize
         #sum_prob1 = float(sum(prob1))
         #prob1 = [i / float(sum(prob1)) for i in prob1]
@@ -197,16 +200,18 @@ class GAPacWar(object):
         np.random.shuffle(parents1_idx)
 
         for i in xrange(0, len(parents1_idx) - 1, 2):
-            cross_over_pivot = np.random.choice(len(GE1[i]))
-            GE1[i], GE1[i + 1] = cross_over(GE1[i], GE1[i+1], cross_over_pivot)
-            GE1[i], GE1[i + 1] = mutate(GE1[i], mutation_prob), mutate(GE1[i+1], mutation_prob)
+            cross_over_pivot = np.random.choice(len(gene1[i]))
+            gene1[i], gene1[i + 1] = cross_over(gene1[i], gene1[i+1], cross_over_pivot)
+            gene1[i], gene1[i + 1] = mutate(gene1[i], mutation_prob), mutate(gene1[i+1], mutation_prob)
 
         # Score is not necessary anymore here
-        return GE1
+        return gene1
 
     def train(self):
         GE1, GE2 = self.GE1, self.GE2
         mutation_prob = self.mutation_prob
+        print("Process pool size: %d." % multiprocessing.cpu_count())
+
         s1, s2 = self.evaluate(GE1, GE2)
 
         for t in xrange(self.turns):
@@ -224,10 +229,11 @@ class GAPacWar(object):
                     print("\nckpt saved!")
 
             print("\nTurn #%d is complete, generate new specie 1" % (t))
+            self.save_checkpoint(GE1, GE2, s1, s2, self.run_id, i, self.save_dir)
             #GE1, GE2 = GE2, GE1
             GE2, s2 = self.topk(GE1, s1, k=5)
-            #GE1 = generate_GENE(self.population_size)
-            #self.save_checkpoint(GE1, GE2, s1, s2, self.run_id, i, self.save_dir)
+            GE1 = generate_GENE(self.population_size)
+            
         best_gene, best_score = self.topk(GE2, s2, k=1)
         best_gene = "".join([str(i) for i in best_gene[0]])
         print("The best gene is: %s, score: %.2f" % (best_gene, best_score[0]))
@@ -273,11 +279,12 @@ class GAPacWar(object):
 
 if __name__ == '__main__':
     #GE1 = [[3 for _ in xrange(50)] for _ in xrange(20)]
-    np.random.seed(7)
-    GE1 = [[3 if i < 25  else 1 for _ in xrange(50)] for i in xrange(50)]
+    #GE1 = [[3 if i < 25  else 1 for _ in xrange(50)] for i in xrange(50)]
     GE2 = [[3 if i == 0 else 1 for _ in xrange(50)] for i in xrange(2)]
+    GE1 = generate_GENE(50)
+    
     gaParwar = GAPacWar(GE1, GE2, 
-        population_size=50, mutation_prob=0.02, temperature=0.5, turns=10, first_rount_time=2,
-        num_iters=200, save_step=100, 
+        population_size=50, mutation_prob=0.05, temperature=0.1, turns=10, first_rount_time=50,
+        elimination_ratio=0.2, num_iters=200, save_step=100, 
         run_id="25pop", save_dir="ckpt/")
     gaParwar.train()

@@ -1,15 +1,16 @@
 import numpy as np
-import json
+import random
+import json, time
 def softmax(s, t=1.0):
     x = np.array(s)
     res = np.exp(x / t) / np.sum(np.exp(x / t), axis=0)
     return res.tolist()
 
 def generate_GENE(population, gene_length=50):
-    ge = np.random.choice(4, gene_length).tolist()
+    np.random.seed(np.random.randint(100))
     GE = []
     for i in xrange(population):
-        GE.append(np.random.choice(4, gene_length).tolist())
+        GE.append(np.random.randint(low=0, high=4, size=gene_length).tolist())
     return GE
 
 def load_genes(dir_GE1, dir_GE2):
