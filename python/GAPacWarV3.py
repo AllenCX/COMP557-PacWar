@@ -4,6 +4,10 @@ import random
 import sys, os, json, time, copy
 import operator
 from multiprocessing import Pool, Process, Queue, Array
+'''
+This version will fix GE2 and only improve GE1, then fix GE1 searching GE2.
+'''
+
 
 def generate_GENE(population, gene_length=50):
     ge = np.random.choice(4, gene_length).tolist()
@@ -24,7 +28,6 @@ def softmax(s):
     x = np.array(s)
     res = np.exp(x) / np.sum(np.exp(x), axis=0)
     return res.tolist()
-
 class GAPacWar(object):
     def __init__(self, 
                  GE1,
@@ -138,58 +141,44 @@ class GAPacWar(object):
         ge2_scores = [i / len(GE1) for i in ge2_scores]
         return ge1_scores, ge2_scores
 
-    def selection(self, GE1, GE2, s1, s2):
+    def selection(self, GE1, s1):
         '''
         s1: scores for species 1
         s2: scores for species 2
         '''
-        assert len(GE1) == len(GE2)
         pop_size = len(GE1)
         
-        #sum_ge1_scores = float(sum(s1)) + 1e-8
-        #sum_ge2_scores = float(sum(s2)) + 1e-8
+        sum_ge1_scores = float(sum(s1)) + 1e-8
+        
         #s1 = [i / sum_ge1_scores for i in s1]
-        #s2 = [i / sum_ge2_scores for i in s2]
         s1 = softmax(s1)
-        s2 = softmax(s2)
-
+        #exit()
         new_gene1_idx = np.random.choice(pop_size, size=pop_size, p=s1)
         new_gene1 = [GE1[i] for i in new_gene1_idx]
         new_s1 = [s1[i] for i in new_gene1_idx]
 
-        new_gene2_idx = np.random.choice(pop_size, size=pop_size, p=s2)
-        new_gene2 = [GE2[i] for i in new_gene2_idx]
-        new_s2 = [s2[i] for i in new_gene2_idx]
+        return new_s1, new_gene1
 
-        return new_s1, new_s2, new_gene1, new_gene2
-
-    def mate_and_mutate(self, GE1, GE2, s1, s2, mutation_prob):
+    def mate_and_mutate(self, GE1, s1, mutation_prob):
         '''
         s1: a list scores of GE1
         s2: a list scores of GE2
         '''
         pop_size = len(GE1)
         scores_gene1 = zip(s1, GE1)
-        scores_gene2 = zip(s2, GE2)
 
         # sort the scores by descend order
         scores_gene1 = sorted(scores_gene1, key=lambda x: x[0], reverse=True)
-        scores_gene2 = sorted(scores_gene2, key=lambda x: x[0], reverse=True)
         
         # duplicate the gene with the highest score, remove the gene with lowest score
         scores_gene1.pop()
         scores_gene1.append(scores_gene1[0])
-        scores_gene2.pop()
-        scores_gene2.append(scores_gene2[0])
         
         prob1, gene1 = zip(*scores_gene1)
-        prob2, gene2 = zip(*scores_gene2)
 
         # normalize
         sum_prob1 = float(sum(prob1))
-        sum_prob2 = float(sum(prob2))
         prob1 = [i / float(sum(prob1)) for i in prob1]
-        prob2 = [i / float(sum(prob2)) for i in prob2]
 
 
         def cross_over(gene1, gene2, pivot):
@@ -209,9 +198,8 @@ class GAPacWar(object):
 
         # a list of shuffled genes, for each two (i, i + 1) of the elements, are the parents
         # which will mate and produce next generation
-        parents1_idx, parents2_idx = range(pop_size), range(pop_size)
+        parents1_idx = range(pop_size)
         np.random.shuffle(parents1_idx)
-        np.random.shuffle(parents2_idx)
 
         #parents1_idx = np.random.choice(pop_size, pop_size, replace=False)
         #parents2_idx = np.random.choice(pop_size, pop_size, replace=False)
@@ -221,12 +209,8 @@ class GAPacWar(object):
             GE1[i], GE1[i + 1] = cross_over(GE1[i], GE1[i+1], cross_over_pivot)
             GE1[i], GE1[i + 1] = mutate(GE1[i], mutation_prob), mutate(GE1[i+1], mutation_prob)
 
-            cross_over_pivot = np.random.choice(len(GE2[i]))
-            GE2[i], GE2[i + 1] = cross_over(GE2[i], GE2[i+1], cross_over_pivot)
-            GE2[i], GE2[i + 1] = mutate(GE2[i], mutation_prob), mutate(GE2[i+1], mutation_prob)
-        
         # Score is not necessary anymore here
-        return GE1, GE2
+        return GE1
 
     def train(self):
         GE1, GE2 = self.GE1, self.GE2
@@ -235,37 +219,16 @@ class GAPacWar(object):
         s1, s2 = self.evaluate(GE1, GE2)
         #self.evaluate(GE1, random_gene, verbose=1)
         for i in xrange(1, self.num_iters+1):
-            
-            '''
-            if i % self.log_step == 0:
-                print("At step %d, The average score for specie 1: %.2f, specie 2: %.2f" % 
-                    (i, sum(s1) / float(len(s1)), sum(s2) / float(len(s2))))
-            '''
-            '''
-            if i % self.elimination_step == 0 and i != 0:
-                total_s1, total_s2 = sum(s1), sum(s2)
-                if total_s1 > total_s2:
-                    GE2 = copy.deepcopy(GE1)
-                    print("Specie 2 eliminated!")
-                else:
-                    GE1 = copy.deepcopy(GE2)
-                    print("Specie 1 eliminated!")
-            '''
-            s1, s2, GE1, GE2 = self.selection(GE1, GE2, s1, s2)
-            GE1, GE2 = self.mate_and_mutate(GE1, GE2, s1, s2, mutation_prob)
+            s1, GE1 = self.selection(GE1, s1)
+            GE1 = self.mate_and_mutate(GE1, s1, mutation_prob)
             s1, s2 = self.evaluate(GE1, GE2)
-            
+
             sys.stdout.write("At step %d, The average score for specie 1: %.2f, specie 2: %.2f\r" % 
                 (i, sum(s1) / float(len(s1)), sum(s2) / float(len(s2))))
             if i % self.save_step == 0:
                 self.save_checkpoint(GE1, GE2, s1, s2, self.run_id, i, self.save_dir)
                 print("\nckpt saved!")
-            
-        #(rounds, c1, c2) = _PyPacwar.battle(GE1[0], random_gene[0])
-        #print("The duel lasted %d rounds, specie 1 remains: %d, random specie remains: %d" % (rounds, c1, c2))
-        #self.evaluate(GE1, random_gene, verbose=1)
-        #self.evaluate(GE2, random_gene, verbose=1)
-        #self.save_checkpoint(GE1, GE2, s1, s2, self.run_id, i, self.save_dir)
+
         best_gene, best_score = self.find_the_best(GE1, GE2, s1, s2)
         best_gene = "".join([str(i) for i in best_gene])
         print("The best gene is: %s, score: %.2f" % (best_gene, best_score))
@@ -304,7 +267,8 @@ class GAPacWar(object):
 def load_genes(dir):
     pass
 if __name__ == '__main__':
-    GE1 = [[3 for _ in xrange(50)] for _ in xrange(50)]
-    GE2 = [[3 for _ in xrange(50)] for _ in xrange(50)]
-    gaParwar = GAPacWar(GE1, GE2, mutation_prob=0.02, num_iters=100, save_step=10, run_id="50pop", save_dir="ckpt/")
+    GE1 = [[3 for _ in xrange(50)] for _ in xrange(20)]
+    #GE1 = generate_GENE(50)
+    GE2 = [[3 for _ in xrange(50)] for _ in xrange(1)]
+    gaParwar = GAPacWar(GE1, GE2, mutation_prob=0.02, num_iters=1000, save_step=10, run_id="50pop", save_dir="ckpt/")
     gaParwar.train()
