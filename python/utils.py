@@ -7,7 +7,6 @@ def softmax(s, t=1.0):
     return res.tolist()
 
 def generate_GENE(population, gene_length=50):
-    np.random.seed(np.random.randint(100))
     GE = []
     for i in xrange(population):
         GE.append(np.random.randint(low=0, high=4, size=gene_length).tolist())
