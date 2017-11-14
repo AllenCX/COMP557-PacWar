@@ -177,7 +177,7 @@ class GAPacWar(object):
         prob1 = list(prob1)
         # normalize
         #sum_prob1 = float(sum(prob1))
-        prob1 = [i / float(sum(prob1)) for i in prob1]
+        prob1 = [i / float(sum(prob1) + 1e-8) for i in prob1]
         #prob1 = softmax(prob1, self.temperature)
         #print(prob1)
         def cross_over(gene1, gene2, pivot):
@@ -199,12 +199,13 @@ class GAPacWar(object):
         # which will mate and produce next generation
         parents1_idx = range(pop_size)
         np.random.shuffle(parents1_idx)
-
-        for i in xrange(0, len(parents1_idx) - 1, 2):
+        
+        for i in xrange(0, pop_size, 2):
             cross_over_pivot = np.random.choice(len(gene1[i]))
+            #print(i, len(gene1), cross_over_pivot)
             gene1[i], gene1[i + 1] = cross_over(gene1[i], gene1[i+1], cross_over_pivot)
             gene1[i], gene1[i + 1] = mutate(gene1[i], mutation_prob), mutate(gene1[i+1], mutation_prob)
-
+        #exit()
         # Score is not necessary anymore here
         return gene1
 
@@ -236,10 +237,14 @@ class GAPacWar(object):
             #GE1, GE2 = GE2, GE1
             new_GE2, new_s2 = self.topk(GE1, s1, k=2)
             GE2 += new_GE2
+            s2 += new_s2
+            GE2, s2 = self.topk(GE2, s2, k=self.population_size)
             print("\nTurn #%d is complete, generate new specie 1, the poplutation of specie 2 %d" % (t, len(GE2)))
+            if t == self.turns - 1:
+                break
             GE1 = generate_GENE(self.population_size)
             
-        best_gene, best_score = self.topk(GE2, s2, k=1)
+        best_gene, best_score = self.topk(GE1, s1, k=1)
         best_gene = "".join([str(i) for i in best_gene[0]])
         print("The best gene is: %s, score: %.2f" % (best_gene, best_score[0]))
         return GE1, GE2
@@ -247,16 +252,15 @@ class GAPacWar(object):
     def find_the_best(self, GE1, GE2, s1, s2, verbose=0):
         best_index1, best_score_1 = max(enumerate(s1), key=operator.itemgetter(1))
         best_index2, best_score_2 = max(enumerate(s2), key=operator.itemgetter(1))
-        #return GE1[best_index1], GE2[best_index2], best_score_1, best_score_2
         if best_score_1 > best_score_2:
             return GE1[best_index1], best_score_1
         else:
             return GE2[best_index2], best_score_2
 
     def topk(self, GE, s, k=1):
-        score_gene = zip(GE, s)
+        score_gene = zip(s, GE)
         score_gene = sorted(score_gene, key=lambda x: x[0], reverse=True)
-        gene, score = zip(*score_gene)
+        score, gene = zip(*score_gene)
         gene = list(gene)
         score = list(score)
         return gene[:k], score[:k]
@@ -289,9 +293,8 @@ if __name__ == '__main__':
     np.random.seed(np.random.randint(100))
     GE2 = [[3 if i == 0 else 1 for _ in xrange(50)] for i in xrange(2)]
     GE1 = generate_GENE(50)
-    
     gaParwar = GAPacWar(GE1, GE2, 
-        population_size=50, mutation_prob=0.02, temperature=5.0, turns=10, first_rount_time=2,
-        elimination_ratio=0.2, num_iters=500, save_step=100, 
-        run_id="25pop", save_dir="ckpt/")
+        population_size=50, mutation_prob=0.02, temperature=10.0, turns=20, first_rount_time=2,
+        elimination_ratio=0.4, num_iters=1000, save_step=100, 
+        run_id="v0.1", save_dir="ckpt/")
     gaParwar.train()
