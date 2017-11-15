@@ -295,13 +295,13 @@ if __name__ == '__main__':
     #GE1 = [[3 if i < 25  else 1 for _ in xrange(50)] for i in xrange(50)]
 
     np.random.seed(np.random.randint(100))
-    #GE2 = [[3 if i == 0 else 1 for _ in xrange(50)] for i in xrange(2)]
-    #GE1 = generate_GENE(50)
-    GE2 = load_genes("ckpt/v0.1_GE2.json")
-    GE1 = load_genes("ckpt/v0.1_GE1.json")
+    GE2 = [[3 if i == 0 else 1 for _ in xrange(50)] for i in xrange(2)]
+    GE1 = generate_GENE(50)
+    #GE2 = load_genes("ckpt/v0.1_GE2.json")
+    #GE1 = load_genes("ckpt/v0.1_GE1.json")
     print(len(GE1), len(GE2))
     gaParwar = GAPacWar(GE1, GE2, 
-        population_size=50, mutation_prob=0.02, temperature=10.0, turns=20, first_rount_time=1,
-        elimination_ratio=0.4, num_iters=10, save_step=100, 
+        population_size=50, mutation_prob=0.02, temperature=10.0, turns=20, first_rount_time=2,
+        elimination_ratio=0.4, num_iters=500, save_step=100, 
         run_id="v0.1.1", save_dir="ckpt/")
     gaParwar.train()
