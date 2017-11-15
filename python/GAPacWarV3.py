@@ -143,9 +143,10 @@ class GAPacWar(object):
         '''
         pop_size = len(GE1)
         
-        sum_ge1_scores = float(sum(s1)) 
-        
+        sum_ge1_scores = float(sum(s1))
         s1_prob = softmax(s1, self.temperature)
+
+        #print(pop_size, s1_prob)
         new_gene1_idx = np.random.choice(pop_size, size=pop_size, p=s1_prob)
         new_gene1 = [GE1[i] for i in new_gene1_idx]
         new_s1 = [s1[i] for i in new_gene1_idx]
@@ -201,8 +202,10 @@ class GAPacWar(object):
         np.random.shuffle(parents1_idx)
         
         for i in xrange(0, pop_size, 2):
-            cross_over_pivot = np.random.choice(len(gene1[i]))
             #print(i, len(gene1), cross_over_pivot)
+            if i + 1 >= len(gene1):
+                break
+            cross_over_pivot = np.random.choice(len(gene1[i]))
             gene1[i], gene1[i + 1] = cross_over(gene1[i], gene1[i+1], cross_over_pivot)
             gene1[i], gene1[i + 1] = mutate(gene1[i], mutation_prob), mutate(gene1[i+1], mutation_prob)
         #exit()
@@ -214,17 +217,18 @@ class GAPacWar(object):
         mutation_prob = self.mutation_prob
         print("Process pool size: %d." % multiprocessing.cpu_count())
 
-        s1, s2 = self.evaluate(GE1, GE2)
+        
 
         for t in xrange(self.turns):
             # for the first turn, time the iteration number by 10
             num_iters = self.num_iters * self.first_rount_time if t == 0 else self.num_iters
             for i in xrange(1, num_iters+1):
                 #mutation_fatctor = sum(s2) / sum(s1)
+
                 mutation_fatctor = 1
+                s1, s2 = self.evaluate(GE1, GE2)
                 s1, GE1 = self.selection(GE1, s1)
                 GE1 = self.mate_and_mutate(GE1, s1, mutation_prob * mutation_fatctor)
-                s1, s2 = self.evaluate(GE1, GE2)
 
                 sys.stdout.write("At turn %d, step %d, the average score for specie 1: %.2f, specie 2: %.2f\r" % 
                     (t, i, sum(s1) / float(len(s1)), sum(s2) / float(len(s2))))
@@ -291,10 +295,13 @@ if __name__ == '__main__':
     #GE1 = [[3 if i < 25  else 1 for _ in xrange(50)] for i in xrange(50)]
 
     np.random.seed(np.random.randint(100))
-    GE2 = [[3 if i == 0 else 1 for _ in xrange(50)] for i in xrange(2)]
-    GE1 = generate_GENE(50)
+    #GE2 = [[3 if i == 0 else 1 for _ in xrange(50)] for i in xrange(2)]
+    #GE1 = generate_GENE(50)
+    GE2 = load_genes("ckpt/v0.1_GE2.json")
+    GE1 = load_genes("ckpt/v0.1_GE1.json")
+    print(len(GE1), len(GE2))
     gaParwar = GAPacWar(GE1, GE2, 
-        population_size=50, mutation_prob=0.02, temperature=10.0, turns=20, first_rount_time=2,
-        elimination_ratio=0.4, num_iters=1000, save_step=100, 
-        run_id="v0.1", save_dir="ckpt/")
+        population_size=50, mutation_prob=0.02, temperature=10.0, turns=20, first_rount_time=1,
+        elimination_ratio=0.4, num_iters=10, save_step=100, 
+        run_id="v0.1.1", save_dir="ckpt/")
     gaParwar.train()
