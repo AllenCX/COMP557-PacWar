@@ -237,20 +237,35 @@ class GAPacWar(object):
                     print("\nckpt saved!")
 
             
-            self.save_checkpoint(GE1, GE2, s1, s2, self.run_id, i, self.save_dir)
+            self.save_checkpoint(GE1, GE2, s1, s2, self.run_id, t * i, self.save_dir)
             #GE1, GE2 = GE2, GE1
-            new_GE2, new_s2 = self.topk(GE1, s1, k=2)
-            GE2 += new_GE2
-            s2 += new_s2
+            print("\nGE1 score: %.2f, GE2 score: %.2f" % (np.mean(s1), np.mean(s2)))
+            if(np.mean(s1) > np.mean(s2)):
+                new_GE2, new_s2 = self.topk(GE1, s1, k=10)
+                GE2 += new_GE2
+                s2 += new_s2
             GE2, s2 = self.topk(GE2, s2, k=self.population_size)
             print("\nTurn #%d is complete, generate new specie 1, the poplutation of specie 2 %d" % (t, len(GE2)))
             if t == self.turns - 1:
                 break
-            GE1 = generate_GENE(self.population_size)
-            
+
+            best_gene, best_score = self.topk(GE1, s1, k=1)
+            best_gene = "".join([str(i) for i in best_gene[0]])
+            print("GE1: The best gene is: %s, score: %.2f" % (best_gene, best_score[0]))
+
+            best_gene, best_score = self.topk(GE2, s2, k=1)
+            best_gene = "".join([str(i) for i in best_gene[0]])
+            print("GE2: The best gene is: %s, score: %.2f" % (best_gene, best_score[0]))
+            #GE1 = generate_GENE(self.population_size)
+            GE1 = copy.deepcopy(GE2)
+
         best_gene, best_score = self.topk(GE1, s1, k=1)
         best_gene = "".join([str(i) for i in best_gene[0]])
-        print("The best gene is: %s, score: %.2f" % (best_gene, best_score[0]))
+        print("GE1: The best gene is: %s, score: %.2f" % (best_gene, best_score[0]))
+
+        best_gene, best_score = self.topk(GE2, s2, k=1)
+        best_gene = "".join([str(i) for i in best_gene[0]])
+        print("GE2: The best gene is: %s, score: %.2f" % (best_gene, best_score[0]))
         return GE1, GE2
 
     def find_the_best(self, GE1, GE2, s1, s2, verbose=0):
@@ -269,8 +284,9 @@ class GAPacWar(object):
         score = list(score)
         return gene[:k], score[:k]
 
-    def test(self, GE1, GE2):
-        pass
+    def eval_and_topK(self, GE1, GE2, k):
+        s1, s2 = self.evaluate(GE1, GE2)
+
 
     def save_checkpoint(self, GE1, GE2, s1, s2, run_id, step, save_dir):
         '''
@@ -284,9 +300,9 @@ class GAPacWar(object):
             gene_str = "".join([str(k) for k in GE2[i]])
             GE2_dict[gene_str] = s2[i]
         GE1_json_str, GE2_json_str = json.dumps(GE1_dict), json.dumps(GE2_dict)
-        with open("%s/%s_GE1.json" % (save_dir, str(run_id)), "w") as f:
+        with open("%s/%s_GE1_%d.json" % (save_dir, str(run_id), step), "w") as f:
             json.dump(GE1_dict, f)
-        with open("%s/%s_GE2.json" % (save_dir, str(run_id)), "w") as f:
+        with open("%s/%s_GE2_%d.json" % (save_dir, str(run_id), step), "w") as f:
             json.dump(GE2_dict, f)
         best_gene, best_score = self.find_the_best(GE1, GE2, s1, s2)
 
@@ -294,14 +310,15 @@ if __name__ == '__main__':
     #GE1 = [[3 for _ in xrange(50)] for _ in xrange(20)]
     #GE1 = [[3 if i < 25  else 1 for _ in xrange(50)] for i in xrange(50)]
 
+    RUN_ID = "v0.1.2"
     np.random.seed(np.random.randint(100))
     GE2 = [[3 if i == 0 else 1 for _ in xrange(50)] for i in xrange(2)]
     GE1 = generate_GENE(50)
-    #GE2 = load_genes("ckpt/v0.1_GE2.json")
-    #GE1 = load_genes("ckpt/v0.1_GE1.json")
+    GE2 = load_genes("ckpt/" + RUN_ID + "_GE2.json")
+    GE1 = load_genes("ckpt/" + RUN_ID + "_GE2.json")
     print(len(GE1), len(GE2))
     gaParwar = GAPacWar(GE1, GE2, 
-        population_size=50, mutation_prob=0.02, temperature=10.0, turns=20, first_rount_time=2,
-        elimination_ratio=0.4, num_iters=500, save_step=100, 
-        run_id="v0.1.1", save_dir="ckpt/")
+        population_size=50, mutation_prob=0.01, temperature=5.0, turns=100, first_rount_time=1,
+        elimination_ratio=0.2, num_iters=50, save_step=50, 
+        run_id=RUN_ID, save_dir="ckpt/")
     gaParwar.train()
